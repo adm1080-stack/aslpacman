@@ -1,0 +1,311 @@
+
+<head>
+    <meta charset="UTF-8">
+    <title>JS Pac-Man</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #game-container {
+            text-align: center;
+        }
+        canvas {
+            border: 4px solid #1919a6;
+            background-color: #000;
+            box-shadow: 0 0 20px rgba(25, 25, 166, 0.5);
+        }
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 440px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="info-bar">
+        <span>SCORE: <span id="score">0</span></span>
+        <span>LIVES: <span id="lives">3</span></span>
+    </div>
+    <canvas id="canvas" width="440" height="440"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const livesEl = document.getElementById("lives");
+
+const tileSize = 20;
+const speed = 2; // Speed per frame
+
+// 1: Wall, 0: Dot, 2: Empty, 3: Power Pellet
+const map = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
+    [1,3,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,3,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,1],
+    [1,1,1,1,1,0,1,1,1,2,1,1,2,1,1,1,0,1,1,1,1,1],
+    [1,1,1,1,1,0,1,2,2,2,2,2,2,2,2,1,0,1,1,1,1,1],
+    [1,1,1,1,1,0,1,2,1,1,2,2,1,1,2,1,0,1,1,1,1,1],
+    [2,2,2,2,2,0,2,2,1,2,2,2,2,1,2,2,0,2,2,2,2,2],
+    [1,1,1,1,1,0,1,2,1,1,1,1,1,1,2,1,0,1,1,1,1,1],
+    [1,1,1,1,1,0,1,2,2,2,2,2,2,2,2,1,0,1,1,1,1,1],
+    [1,1,1,1,1,0,1,2,1,1,1,1,1,1,2,1,0,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
+    [1,3,0,0,1,0,0,0,0,0,2,2,0,0,0,0,0,1,0,0,3,1],
+    [1,1,1,0,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1,1,1],
+    [1,0,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,1],
+    [1,0,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
+
+let score = 0;
+let lives = 3;
+let powerTimer = 0;
+
+class Pacman {
+    constructor() {
+        this.x = 10 * tileSize;
+        this.y = 16 * tileSize;
+        this.dirX = 0;
+        this.dirY = 0;
+        this.nextDirX = 0;
+        this.nextDirY = 0;
+        this.mouthAngle = 0.2;
+        this.mouthSpeed = 0.02;
+    }
+
+    update() {
+        if (this.x % tileSize === 0 && this.y % tileSize === 0) {
+            if (!isWall(this.x + this.nextDirX * tileSize, this.y + this.nextDirY * tileSize)) {
+                this.dirX = this.nextDirX;
+                this.dirY = this.nextDirY;
+            }
+        }
+
+        if (!isWall(this.x + this.dirX * speed, this.y + this.dirY * speed)) {
+            this.x += this.dirX * speed;
+            this.y += this.dirY * speed;
+        }
+
+        if (this.x < 0) this.x = canvas.width - tileSize;
+        if (this.x >= canvas.width) this.x = 0;
+
+        this.mouthAngle += this.mouthSpeed;
+        if (this.mouthAngle > 0.4 || this.mouthAngle < 0.05) {
+            this.mouthSpeed = -this.mouthSpeed;
+        }
+
+        const currentTileX = Math.floor((this.x + tileSize / 2) / tileSize);
+        const currentTileY = Math.floor((this.y + tileSize / 2) / tileSize);
+
+        if (map[currentTileY][currentTileX] === 0) {
+            map[currentTileY][currentTileX] = 2;
+            score += 10;
+        } else if (map[currentTileY][currentTileX] === 3) {
+            map[currentTileY][currentTileX] = 2;
+            score += 50;
+            powerTimer = 300;
+        }
+        scoreEl.innerText = score;
+    }
+
+    draw() {
+        let rotation = 0;
+        if (this.dirX === 1) rotation = 0;
+        if (this.dirX === -1) rotation = Math.PI;
+        if (this.dirY === 1) rotation = Math.PI / 2;
+        if (this.dirY === -1) rotation = -Math.PI / 2;
+
+        ctx.beginPath();
+        ctx.arc(
+            this.x + tileSize / 2,
+            this.y + tileSize / 2,
+            tileSize / 2,
+            rotation + this.mouthAngle,
+            rotation + Math.PI * 2 - this.mouthAngle
+        );
+        ctx.lineTo(this.x + tileSize / 2, this.y + tileSize / 2);
+        ctx.fillStyle = "#ffff00";
+        ctx.fill();
+        ctx.closePath();
+    }
+}
+
+class Ghost {
+    constructor(x, y, color) {
+        this.startX = x * tileSize;
+        this.startY = y * tileSize;
+        this.x = this.startX;
+        this.y = this.startY;
+        this.color = color;
+        this.dirX = 0;
+        this.dirY = -1;
+    }
+
+    update() {
+        if (this.x % tileSize === 0 && this.y % tileSize === 0) {
+            const possibleDirs = [
+                { x: 0, y: -1 },
+                { x: 0, y: 1 },
+                { x: -1, y: 0 },
+                { x: 1, y: 0 }
+            ].filter(dir => {
+                if (dir.x === -this.dirX && dir.y === -this.dirY) return false;
+                return !isWall(this.x + dir.x * tileSize, this.y + dir.y * tileSize);
+            });
+
+            if (possibleDirs.length > 0) {
+                const choice = possibleDirs[Math.floor(Math.random() * possibleDirs.length)];
+                this.dirX = choice.x;
+                this.dirY = choice.y;
+            } else {
+                this.dirX = -this.dirX;
+                this.dirY = -this.dirY;
+            }
+        }
+
+        this.x += this.dirX * speed;
+        this.y += this.dirY * speed;
+    }
+
+    draw() {
+        ctx.beginPath();
+        ctx.arc(this.x + tileSize / 2, this.y + tileSize / 2, tileSize / 2, Math.PI, 0, false);
+        ctx.lineTo(this.x + tileSize, this.y + tileSize);
+        ctx.lineTo(this.x, this.y + tileSize);
+        ctx.fillStyle = powerTimer > 0 ? "#0000ff" : this.color;
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    reset() {
+        this.x = this.startX;
+        this.y = this.startY;
+    }
+}
+
+function isWall(x, y) {
+    const tileX = Math.floor(x / tileSize);
+    const tileY = Math.floor(y / tileSize);
+    if (tileY < 0 || tileY >= map.length || tileX < 0 || tileX >= map[0].length) {
+        return false;
+    }
+    return map[tileY][tileX] === 1;
+}
+
+const pacman = new Pacman();
+const ghosts = [
+    new Ghost(10, 9, "#ff0000"),
+    new Ghost(11, 9, "#ffb8ff"),
+    new Ghost(10, 10, "#00ffff"),
+    new Ghost(11, 10, "#ffb852")
+];
+
+// Controls: Arrow keys only
+window.addEventListener("keydown", e => {
+    switch (e.key) {
+        case "ArrowUp":
+            pacman.nextDirX = 0; pacman.nextDirY = -1; break;
+        case "ArrowDown":
+            pacman.nextDirX = 0; pacman.nextDirY = 1; break;
+        case "ArrowLeft":
+            pacman.nextDirX = -1; pacman.nextDirY = 0; break;
+        case "ArrowRight":
+            pacman.nextDirX = 1; pacman.nextDirY = 0; break;
+    }
+});
+
+function drawMap() {
+    for (let r = 0; r < map.length; r++) {
+        for (let c = 0; c < map[r].length; c++) {
+            if (map[r][c] === 1) {
+                ctx.fillStyle = "#1919a6";
+                ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+            } else if (map[r][c] === 0) {
+                ctx.beginPath();
+                ctx.arc(c * tileSize + tileSize / 2, r * tileSize + tileSize / 2, 3, 0, Math.PI * 2);
+                ctx.fillStyle = "#ffb8ae";
+                ctx.fill();
+                ctx.closePath();
+            } else if (map[r][c] === 3) {
+                ctx.beginPath();
+                ctx.arc(c * tileSize + tileSize / 2, r * tileSize + tileSize / 2, 6, 0, Math.PI * 2);
+                ctx.fillStyle = "#ffb8ae";
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+    }
+}
+
+function checkCollisions() {
+    ghosts.forEach(ghost => {
+        const dist = Math.hypot(
+            (pacman.x + tileSize / 2) - (ghost.x + tileSize / 2),
+            (pacman.y + tileSize / 2) - (ghost.y + tileSize / 2)
+        );
+
+        if (dist < tileSize) {
+            if (powerTimer > 0) {
+                ghost.reset();
+                score += 200;
+            } else {
+                lives--;
+                livesEl.innerText = lives;
+                if (lives === 0) {
+                    alert("Game Over! Final Score: " + score);
+                    document.location.reload();
+                } else {
+                    pacman.x = 10 * tileSize;
+                    pacman.y = 16 * tileSize;
+                    pacman.dirX = 0;
+                    pacman.dirY = 0;
+                    pacman.nextDirX = 0;
+                    pacman.nextDirY = 0;
+                }
+            }
+        }
+    });
+}
+
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (powerTimer > 0) powerTimer--;
+
+    drawMap();
+    pacman.update();
+    pacman.draw();
+
+    ghosts.forEach(ghost => {
+        ghost.update();
+        ghost.draw();
+    });
+
+    checkCollisions();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
